@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\.claude\\\\projects\" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName | Head)",
+      "Bash(npm run *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm install *)",
+      "Bash(npx @capacitor/assets generate --iconBackgroundColor \"#071e45\" --splashBackgroundColor \"#071e45\")",
+      "Bash(npx cap *)",
+      "Bash(.\\\\gradlew assembleDebug)",
+      "Bash(cmd /c \"gradlew.bat assembleDebug\")",
+      "Bash(gh auth *)",
+      "PowerShell(gh auth status 2>&1)"
+    ]
+  }
+}

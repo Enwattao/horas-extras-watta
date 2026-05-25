@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(npm run dev)",
+      "Bash(npm run preview)",
+      "Bash(npm list *)",
+      "Bash(npx cap sync)",
+      "Bash(npx cap open android)",
+      "Bash(npx cap --version)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-Content *)"
+    ]
+  }
+}

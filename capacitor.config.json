@@ -1,0 +1,18 @@
+{
+  "appId": "com.watta.horasextras",
+  "appName": "Horas Extras",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Filesystem": {},
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#071e45",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false
+    }
+  }
+}
