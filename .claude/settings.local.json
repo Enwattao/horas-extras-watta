@@ -10,7 +10,9 @@
       "Bash(.\\\\gradlew assembleDebug)",
       "Bash(cmd /c \"gradlew.bat assembleDebug\")",
       "Bash(gh auth *)",
-      "PowerShell(gh auth status 2>&1)"
+      "PowerShell(gh auth status 2>&1)",
+      "PowerShell($env:PATH = $env:PATH + \";C:\\\\Program Files\\\\GitHub CLI\"; gh --version 2>&1)",
+      "PowerShell($gh = \"C:\\\\Users\\\\enwattao\\\\Downloads\\\\gh_cli\\\\bin\\\\gh.exe\"; & $gh auth status 2>&1)"
     ]
   }
 }

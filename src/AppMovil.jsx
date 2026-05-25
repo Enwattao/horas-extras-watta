@@ -8,6 +8,9 @@ import { jsPDF } from 'jspdf';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
+const APP_VERSION = '1.0.0';
+const GITHUB_REPO = 'Enwattao/horas-extras-watta';
+
 // ─── PALETA ───────────────────────────────────────────────────────────────────
 const PALETTE = [
   '#2563eb','#7c3aed','#db2777','#dc2626','#ea580c',
@@ -814,6 +817,64 @@ export default function AppMovil() {
   // ═══════════════════════════════════════════════════════════════════════════
   // MODAL: AJUSTES
   // ═══════════════════════════════════════════════════════════════════════════
+  function BtnActualizar(){
+    const [estado,setEstado]=useState('idle'); // idle | buscando | hayUpdate | alDia | error
+    const [nuevaVer,setNuevaVer]=useState('');
+    const [urlApk,setUrlApk]=useState('');
+
+    const buscar=async()=>{
+      setEstado('buscando');
+      try{
+        const r=await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,{cache:'no-store'});
+        if(!r.ok)throw new Error('Sin respuesta');
+        const data=await r.json();
+        const tag=data.tag_name?.replace('v','');
+        const apkAsset=data.assets?.find(a=>a.name.endsWith('.apk'));
+        if(tag&&apkAsset){
+          setNuevaVer(tag);
+          setUrlApk(apkAsset.browser_download_url);
+          setEstado(tag!==APP_VERSION?'hayUpdate':'alDia');
+        }else{
+          setEstado('error');
+        }
+      }catch{
+        setEstado('error');
+      }
+    };
+
+    const descargar=()=>{
+      window.open(urlApk,'_blank');
+      showToast('Abriendo descarga…');
+    };
+
+    return(
+      <div style={{background:C.surfaceVar,borderRadius:14,padding:'14px 16px',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:estado==='hayUpdate'?12:0}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:fs,color:C.onSurface}}>Actualización de la app</div>
+            <div style={{fontSize:fsS,color:C.onSurface3,marginTop:2}}>
+              {estado==='idle'&&`Versión actual: ${APP_VERSION}`}
+              {estado==='buscando'&&'Buscando actualizaciones…'}
+              {estado==='alDia'&&'✅ Ya tienes la última versión'}
+              {estado==='hayUpdate'&&`🆕 Nueva versión disponible: ${nuevaVer}`}
+              {estado==='error'&&'⚠️ No se pudo comprobar'}
+            </div>
+          </div>
+          {(estado==='idle'||estado==='alDia'||estado==='error')&&(
+            <button onClick={buscar} style={{padding:'9px 14px',background:C.blue4,border:'none',borderRadius:10,color:'#fff',fontSize:fsS,fontWeight:700,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',flexShrink:0}}>
+              {estado==='buscando'?'…':'🔄 Buscar'}
+            </button>
+          )}
+        </div>
+        {estado==='hayUpdate'&&(
+          <button onClick={descargar} style={{width:'100%',padding:'12px',background:'#16a34a',border:'none',borderRadius:10,color:'#fff',fontSize:fs,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+            ⬇ Descargar v{nuevaVer}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   function ModalAjustes(){
     const [corteLocal,setCorteLocal]=useState(diaCorte);
     const guardarCorte=()=>{
@@ -901,13 +962,16 @@ export default function AppMovil() {
           if(!confirm('¿Borrar TODOS los registros?\nOperarios y montajes se conservan.'))return;
           for(const r of regs)await deleteRegistro(r.id);
           await reload();sndDel();showToast('Registros eliminados');closeModal();
-        }} style={{width:'100%',padding:'13px',background:C.danger,border:'none',borderRadius:12,fontSize:fs,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,marginBottom:16}}>
+        }} style={{width:'100%',padding:'13px',background:C.danger,border:'none',borderRadius:12,fontSize:fs,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,marginBottom:14}}>
           🗑 Borrar todos los registros
         </button>
 
+        {/* Actualización */}
+        <BtnActualizar/>
+
         {/* Firma */}
         <div style={{textAlign:'center',padding:'12px 0'}}>
-          <div style={{fontSize:fsS,color:C.onSurface3}}>Creado con ♥ por Watta · v5.0 · 100% offline</div>
+          <div style={{fontSize:fsS,color:C.onSurface3}}>Creado con ♥ por Watta · {APP_VERSION} · 100% offline</div>
         </div>
       </BottomSheet>
     );
