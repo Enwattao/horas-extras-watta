@@ -9,7 +9,8 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
 const APP_VERSION = '1.0.0';
-const GITHUB_REPO = 'Enwattao/horas-extras-watta';
+const APP_BUILD   = 1;
+const GIST_URL    = 'https://gist.githubusercontent.com/Enwattao/03a1fdd890b99b87d36de3d7b7ffd3ba/raw/version.json';
 
 // ─── PALETA ───────────────────────────────────────────────────────────────────
 const PALETTE = [
@@ -120,6 +121,7 @@ export default function AppMovil() {
   const [vMonth,   setVMonth]   = useState(()=>mesContableHoy(JSON.parse(localStorage.getItem('he_corte')||'25')).m);
   const [modal,    setModal]    = useState(null);
   const [toast,    setToast]    = useState(null);
+  const [updateInfo,setUpdateInfo]=useState(null); // {version,build,changelog,apk_url}
   const [grande,   setGrande]   = useState(()=>JSON.parse(localStorage.getItem('he_grande')||'false'));
   const [tema,     setTema]     = useState(()=>localStorage.getItem('he_tema')||'azul');
   const [diasNoLab,setDiasNoLab]= useState(()=>JSON.parse(localStorage.getItem('he_nolaborables')||'[]'));
@@ -147,6 +149,31 @@ export default function AppMovil() {
   const openModal  = useCallback((type,data=null)=>{sndNav();setModal({type,data});},[]);
   const closeModal = ()=>setModal(null);
   const navTab     = t=>{sndNav();setTab(t);};
+
+  const checkUpdate = useCallback(async(manual=false)=>{
+    try{
+      const r=await fetch(GIST_URL+'?t='+Date.now(),{cache:'no-store'});
+      if(!r.ok)throw new Error();
+      const info=await r.json();
+      if(info.build>APP_BUILD){
+        setUpdateInfo(info);
+        localStorage.setItem('he_update_last',Date.now().toString());
+      }else if(manual){
+        showToast('✅ Ya tienes la última versión');
+      }
+    }catch{
+      if(manual)showToast('⚠️ No se pudo comprobar',false);
+    }
+  },[showToast]);
+
+  // Auto-check cada 4 horas
+  useEffect(()=>{
+    const INTERVAL=4*60*60*1000;
+    const last=Number(localStorage.getItem('he_update_last')||'0');
+    if(Date.now()-last>INTERVAL)checkUpdate();
+    const t=setInterval(()=>checkUpdate(),INTERVAL);
+    return()=>clearInterval(t);
+  },[checkUpdate]);
 
   const periodo    = calcPeriodo(vYear,vMonth,diaCorte);
   const regsDelMes = regs.filter(r=>r.fecha>=periodo.desde&&r.fecha<=periodo.hasta);
@@ -235,6 +262,44 @@ export default function AppMovil() {
     return(
       <div style={{position:'fixed',bottom:100,left:'50%',transform:'translateX(-50%)',background:toast.ok?C.success:C.danger,color:'#fff',borderRadius:30,padding:'11px 22px',fontSize:fs,fontWeight:600,zIndex:9999,boxShadow:'0 6px 24px rgba(0,0,0,.25)',display:'flex',alignItems:'center',gap:8,whiteSpace:'nowrap'}}>
         {toast.ok?'✓':'✕'} {toast.msg}
+      </div>
+    );
+  }
+
+  function ModalUpdate(){
+    if(!updateInfo)return null;
+    return(
+      <div style={{position:'fixed',inset:0,zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
+        <div style={{position:'absolute',inset:0,background:'rgba(7,30,69,0.7)',backdropFilter:'blur(4px)'}}/>
+        <div style={{position:'relative',background:C.surface,borderRadius:24,padding:24,maxWidth:360,width:'100%',boxShadow:'0 24px 64px rgba(7,30,69,0.4)'}}>
+          {/* Cabecera */}
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+            <div style={{width:48,height:48,borderRadius:16,background:`linear-gradient(135deg,${C.blue1},${C.blue4})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0}}>🆕</div>
+            <div>
+              <div style={{fontWeight:800,fontSize:fsL,color:C.onSurface}}>Nueva versión</div>
+              <div style={{fontSize:fsS,color:C.onSurface3}}>v{updateInfo.version} disponible</div>
+            </div>
+          </div>
+          {/* Changelog */}
+          {updateInfo.changelog?.length>0&&(
+            <div style={{background:C.surfaceVar,borderRadius:14,padding:'12px 14px',marginBottom:16}}>
+              <div style={{fontSize:fsS,fontWeight:700,color:C.onSurface2,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>Novedades</div>
+              {updateInfo.changelog.map((c,i)=>(
+                <div key={i} style={{display:'flex',gap:8,alignItems:'flex-start',marginBottom:i<updateInfo.changelog.length-1?6:0}}>
+                  <span style={{color:C.success,fontWeight:700,flexShrink:0}}>✓</span>
+                  <span style={{fontSize:fsS,color:C.onSurface,lineHeight:1.4}}>{c}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Botones */}
+          <button onClick={()=>{window.open(updateInfo.apk_url,'_blank');}} style={{width:'100%',padding:'14px',background:C.blue4,border:'none',borderRadius:14,fontSize:fs,color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginBottom:10,boxShadow:`0 4px 16px rgba(${hex2rgb(C.blue4)},.4)`}}>
+            ⬇ Descargar e instalar
+          </button>
+          <button onClick={()=>setUpdateInfo(null)} style={{width:'100%',padding:'12px',background:'transparent',border:`1.5px solid ${C.border}`,borderRadius:14,fontSize:fs,color:C.onSurface2,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+            Ahora no
+          </button>
+        </div>
       </div>
     );
   }
@@ -818,59 +883,21 @@ export default function AppMovil() {
   // MODAL: AJUSTES
   // ═══════════════════════════════════════════════════════════════════════════
   function BtnActualizar(){
-    const [estado,setEstado]=useState('idle'); // idle | buscando | hayUpdate | alDia | error
-    const [nuevaVer,setNuevaVer]=useState('');
-    const [urlApk,setUrlApk]=useState('');
-
+    const [buscando,setBuscando]=useState(false);
     const buscar=async()=>{
-      setEstado('buscando');
-      try{
-        const r=await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,{cache:'no-store'});
-        if(!r.ok)throw new Error('Sin respuesta');
-        const data=await r.json();
-        const tag=data.tag_name?.replace('v','');
-        const apkAsset=data.assets?.find(a=>a.name.endsWith('.apk'));
-        if(tag&&apkAsset){
-          setNuevaVer(tag);
-          setUrlApk(apkAsset.browser_download_url);
-          setEstado(tag!==APP_VERSION?'hayUpdate':'alDia');
-        }else{
-          setEstado('error');
-        }
-      }catch{
-        setEstado('error');
-      }
+      setBuscando(true);
+      await checkUpdate(true);
+      setBuscando(false);
     };
-
-    const descargar=()=>{
-      window.open(urlApk,'_blank');
-      showToast('Abriendo descarga…');
-    };
-
     return(
-      <div style={{background:C.surfaceVar,borderRadius:14,padding:'14px 16px',marginBottom:14}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:estado==='hayUpdate'?12:0}}>
-          <div>
-            <div style={{fontWeight:700,fontSize:fs,color:C.onSurface}}>Actualización de la app</div>
-            <div style={{fontSize:fsS,color:C.onSurface3,marginTop:2}}>
-              {estado==='idle'&&`Versión actual: ${APP_VERSION}`}
-              {estado==='buscando'&&'Buscando actualizaciones…'}
-              {estado==='alDia'&&'✅ Ya tienes la última versión'}
-              {estado==='hayUpdate'&&`🆕 Nueva versión disponible: ${nuevaVer}`}
-              {estado==='error'&&'⚠️ No se pudo comprobar'}
-            </div>
-          </div>
-          {(estado==='idle'||estado==='alDia'||estado==='error')&&(
-            <button onClick={buscar} style={{padding:'9px 14px',background:C.blue4,border:'none',borderRadius:10,color:'#fff',fontSize:fsS,fontWeight:700,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',flexShrink:0}}>
-              {estado==='buscando'?'…':'🔄 Buscar'}
-            </button>
-          )}
+      <div style={{background:C.surfaceVar,borderRadius:14,padding:'14px 16px',marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:fs,color:C.onSurface}}>Actualización de la app</div>
+          <div style={{fontSize:fsS,color:C.onSurface3,marginTop:2}}>Versión actual: {APP_VERSION} (build {APP_BUILD})</div>
         </div>
-        {estado==='hayUpdate'&&(
-          <button onClick={descargar} style={{width:'100%',padding:'12px',background:'#16a34a',border:'none',borderRadius:10,color:'#fff',fontSize:fs,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
-            ⬇ Descargar v{nuevaVer}
-          </button>
-        )}
+        <button onClick={buscar} disabled={buscando} style={{padding:'9px 14px',background:C.blue4,border:'none',borderRadius:10,color:'#fff',fontSize:fsS,fontWeight:700,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',flexShrink:0,opacity:buscando?0.6:1}}>
+          {buscando?'…':'🔄 Buscar'}
+        </button>
       </div>
     );
   }
@@ -1501,6 +1528,7 @@ export default function AppMovil() {
       </div>
       <ActiveModal/>
       <Toast/>
+      <ModalUpdate/>
     </div>
   );
 }
