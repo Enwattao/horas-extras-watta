@@ -8,8 +8,8 @@ import { jsPDF } from 'jspdf';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
-const APP_VERSION = '1.0.0';
-const APP_BUILD   = 1;
+const APP_VERSION = '1.0.1';
+const APP_BUILD   = 2;
 const GIST_URL    = 'https://gist.githubusercontent.com/Enwattao/03a1fdd890b99b87d36de3d7b7ffd3ba/raw/version.json';
 
 // ─── PALETA ───────────────────────────────────────────────────────────────────
@@ -79,24 +79,58 @@ function easterSunday(y){
         mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;
   return new Date(y,mo-1,da);
 }
-const FESTIVOS_FIJOS=['01-01','01-06','02-28','05-01','08-15','09-08','10-12','11-01','12-06','12-08','12-25'];
-function esFestivo(dateStr){
+// ── Calendario laboral KAEFER Huelva 2026 ──
+// tipo: 'nac' rojo (nacional) · 'aut' verde (autonómico) · 'loc' amarillo (local)
+const FESTIVOS_2026={
+  '2026-01-01':['Año Nuevo','nac'],
+  '2026-01-06':['Reyes Magos','nac'],
+  '2026-02-28':['Día de Andalucía','aut'],
+  '2026-04-02':['Jueves Santo','aut'],
+  '2026-04-03':['Viernes Santo','nac'],
+  '2026-05-01':['Día del Trabajo','nac'],
+  '2026-08-03':['Fiesta Local','loc'],
+  '2026-08-15':['Asunción','nac'],
+  '2026-09-08':['Día de la Cinta','loc'],
+  '2026-10-12':['Hispanidad','nac'],
+  '2026-11-02':['Todos los Santos','aut'],
+  '2026-12-07':['Constitución','aut'],
+  '2026-12-08':['Inmaculada','nac'],
+  '2026-12-25':['Navidad','nac'],
+};
+// Festivos genéricos para otros años (tipo por defecto)
+const FESTIVOS_GEN={'01-01':'nac','01-06':'nac','02-28':'aut','05-01':'nac','08-15':'nac','10-12':'nac','11-01':'nac','12-06':'nac','12-08':'nac','12-25':'nac'};
+const NOMBRES_GEN={'01-01':'Año Nuevo','01-06':'Reyes Magos','02-28':'Día de Andalucía','05-01':'Día del Trabajo','08-15':'Asunción','10-12':'Hispanidad','11-01':'Todos los Santos','12-06':'Constitución','12-08':'Inmaculada','12-25':'Navidad'};
+
+// Colores por tipo de festivo (igual que el calendario PDF)
+const FTIPO_COLOR={
+  nac:{bg:'#fee2e2',border:'#dc2626',text:'#b91c1c'},
+  aut:{bg:'#dcfce7',border:'#16a34a',text:'#15803d'},
+  loc:{bg:'#fef9c3',border:'#fbbf24',text:'#b45309'},
+};
+
+// Puentes KAEFER Huelva 2026 (no laborables, horas = festivas)
+const PUENTES_2026=new Set(['2026-01-05','2026-12-24','2026-12-31']);
+const getPuente=dateStr=>PUENTES_2026.has(dateStr)?'Puente':null;
+
+// Jornada intensiva 7h — del 5 jun al 31 ago + Semana Santa (30,31 mar y 1 abr) 2026
+const INTENSIVA_EXTRA=new Set(['2026-03-30','2026-03-31','2026-04-01']);
+const esIntensiva=dateStr=>(dateStr>='2026-06-05'&&dateStr<='2026-08-31')||INTENSIVA_EXTRA.has(dateStr);
+
+function getFestivoTipo(dateStr){
+  if(FESTIVOS_2026[dateStr])return FESTIVOS_2026[dateStr][1];
   const[y,m,d]=dateStr.split('-');
-  if(FESTIVOS_FIJOS.includes(`${m}-${d}`))return true;
+  if(FESTIVOS_GEN[`${m}-${d}`])return FESTIVOS_GEN[`${m}-${d}`];
   const easter=easterSunday(Number(y));
   const viernes=new Date(easter);viernes.setDate(easter.getDate()-2);
   const pv=n=>String(n).padStart(2,'0');
-  return dateStr===`${viernes.getFullYear()}-${pv(viernes.getMonth()+1)}-${pv(viernes.getDate())}`;
+  if(dateStr===`${viernes.getFullYear()}-${pv(viernes.getMonth()+1)}-${pv(viernes.getDate())}`)return'nac';
+  return null;
 }
-const NOMBRES_FESTIVOS={
-  '01-01':'Año Nuevo','01-06':'Reyes Magos','02-28':'Día de Andalucía',
-  '05-01':'Día del Trabajo','08-15':'Asunción','09-08':'Día de la Merced',
-  '10-12':'Hispanidad','11-01':'Todos los Santos','12-06':'Constitución',
-  '12-08':'Inmaculada','12-25':'Navidad',
-};
+function esFestivo(dateStr){return getFestivoTipo(dateStr)!==null;}
 function getNombreFestivo(dateStr){
+  if(FESTIVOS_2026[dateStr])return FESTIVOS_2026[dateStr][0];
   const[y,m,d]=dateStr.split('-');
-  if(NOMBRES_FESTIVOS[`${m}-${d}`])return NOMBRES_FESTIVOS[`${m}-${d}`];
+  if(NOMBRES_GEN[`${m}-${d}`])return NOMBRES_GEN[`${m}-${d}`];
   const easter=easterSunday(Number(y));
   const viernes=new Date(easter);viernes.setDate(easter.getDate()-2);
   const pv=n=>String(n).padStart(2,'0');
@@ -184,7 +218,7 @@ export default function AppMovil() {
   const getDiaNL      = dateStr=>diasNoLab.find(d=>d.fecha===dateStr)||null;
   const esDiaEspecial = dateStr=>{
     const dow=new Date(dateStr+'T12:00:00').getDay();
-    return dow===0||dow===6||esFestivo(dateStr)||!!getDiaNL(dateStr);
+    return dow===0||dow===6||esFestivo(dateStr)||!!getDiaNL(dateStr)||!!getPuente(dateStr);
   };
   const fmtHorasSplit = (horas,dateStr)=>{
     if(!split2h||horas<=2)return`${horas}h`;
@@ -993,6 +1027,30 @@ export default function AppMovil() {
           🗑 Borrar todos los registros
         </button>
 
+        {/* Calendario laboral */}
+        <button onClick={async()=>{
+          try{
+            const isNative=!!(window.Capacitor?.isNativePlatform?.()??window.Capacitor?.isNative);
+            if(isNative){
+              // Convertir a base64 con FileReader (soporta archivos grandes sin desbordar la pila)
+              const blob=await fetch('calendario_laboral.pdf').then(r=>r.blob());
+              const base64=await new Promise((resolve,reject)=>{
+                const reader=new FileReader();
+                reader.onloadend=()=>resolve(String(reader.result).split(',')[1]);
+                reader.onerror=()=>reject(reader.error);
+                reader.readAsDataURL(blob);
+              });
+              await Filesystem.writeFile({path:'calendario_laboral_huelva_2026.pdf',data:base64,directory:Directory.Cache,recursive:true});
+              const{uri}=await Filesystem.getUri({path:'calendario_laboral_huelva_2026.pdf',directory:Directory.Cache});
+              await Share.share({title:'Calendario Laboral Huelva 2026',url:uri,dialogTitle:'Abrir con…'});
+            }else{
+              window.open('calendario_laboral.pdf','_blank');
+            }
+          }catch(e){console.error('PDF calendario:',e);showToast('Error al abrir el PDF: '+(e?.message||'desconocido'),false);}
+        }} style={{width:'100%',padding:'13px',background:'#1e3a5f',border:'none',borderRadius:12,fontSize:fs,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,marginBottom:14,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+          📅 Ver Calendario Laboral Huelva 2026
+        </button>
+
         {/* Actualización */}
         <BtnActualizar/>
 
@@ -1087,26 +1145,35 @@ export default function AppMovil() {
               const hasReg=dayRegs.length>0;
               const dow=new Date(key+'T12:00:00').getDay();
               const isWeekend=dow===0||dow===6;
-              const isFestivo=esFestivo(key);
+              const ftipo=getFestivoTipo(key);
+              const fcol=ftipo?FTIPO_COLOR[ftipo]:null;
               const nlDay=getDiaNL(key);
+              const isPuente=!!getPuente(key);
+              const isIntensiva=esIntensiva(key)&&!isWeekend&&!ftipo&&!isPuente&&!nlDay;
 
               const cellBg=isToday?C.blue4
                 :nlDay?nlDay.color+'28'
-                :isFestivo?'#fef9c3'
-                :isWeekend?'#e8e4ff'
+                :isPuente?'#dbeafe'
+                :fcol?fcol.bg
+                :isWeekend?'#ffedd5'
+                :isIntensiva?'#ede9fe'
                 :hasReg?C.surfaceDim
                 :inPeriod?C.surfaceVar:'#f8f9fc';
-              const cellBorderTop=!isToday&&nlDay?`2px solid ${nlDay.color}`
-                :!isToday&&isFestivo?'2px solid #fbbf24'
-                :!isToday&&isWeekend?'2px solid #8b5cf6'
+              const cellBorderTop=isToday?'none'
+                :nlDay?`2px solid ${nlDay.color}`
+                :isPuente?'2px solid #2563eb'
+                :fcol?`2px solid ${fcol.border}`
+                :isWeekend?'2px solid #fb923c'
+                :isIntensiva?'2px solid #a78bfa'
                 :'none';
 
               return(
                 <div key={key} onClick={()=>handleDayClick(key,dayRegs)}
-                  style={{borderRadius:12,padding:'8px 2px 6px',display:'flex',flexDirection:'column',alignItems:'center',gap:3,cursor:'pointer',minHeight:hasReg?80:(nlDay||isFestivo)?72:58,minWidth:0,overflow:'hidden',background:cellBg,borderTop:cellBorderTop,boxShadow:isToday?`0 4px 12px rgba(${hex2rgb(C.blue4)},.4)`:'none',opacity:inPeriod?1:0.38,transition:'all .1s',position:'relative'}}>
+                  style={{borderRadius:12,padding:'8px 2px 6px',display:'flex',flexDirection:'column',alignItems:'center',gap:3,cursor:'pointer',minHeight:hasReg?80:(nlDay||fcol||isPuente)?72:58,minWidth:0,overflow:'hidden',background:cellBg,borderTop:cellBorderTop,boxShadow:isToday?`0 4px 12px rgba(${hex2rgb(C.blue4)},.4)`:'none',opacity:inPeriod?1:0.38,transition:'all .1s',position:'relative'}}>
 
                   {/* Número día */}
                   <span style={{fontSize:fs+1,fontWeight:isToday||hasReg?700:500,color:isToday?'#fff':C.onSurface,lineHeight:1}}>{d}</span>
+
                   {/* Indicador no laboral */}
                   {nlDay&&!isToday&&(
                     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2,width:'100%'}}>
@@ -1114,10 +1181,14 @@ export default function AppMovil() {
                       <span style={{fontSize:9,fontWeight:700,color:nlDay.color,textAlign:'center',lineHeight:1.3,width:'100%',wordBreak:'break-word',whiteSpace:'normal',padding:'0 3px'}}>{nlDay.motivo}</span>
                     </div>
                   )}
+                  {/* Puente */}
+                  {!nlDay&&isPuente&&!isToday&&(
+                    <span style={{fontSize:9,fontWeight:700,color:'#1d4ed8',textAlign:'center',lineHeight:1.3,width:'100%',wordBreak:'break-word',padding:'0 3px'}}>Puente</span>
+                  )}
                   {/* Nombre festivo */}
-                  {!nlDay&&!isToday&&isFestivo&&(()=>{
+                  {!nlDay&&!isPuente&&!isToday&&fcol&&(()=>{
                     const nombre=getNombreFestivo(key);
-                    return nombre?<span style={{fontSize:9,fontWeight:700,color:'#b45309',textAlign:'center',lineHeight:1.3,width:'100%',wordBreak:'break-word',whiteSpace:'normal',padding:'0 3px'}}>{nombre}</span>:null;
+                    return nombre?<span style={{fontSize:9,fontWeight:700,color:fcol.text,textAlign:'center',lineHeight:1.3,width:'100%',wordBreak:'break-word',whiteSpace:'normal',padding:'0 3px'}}>{nombre}</span>:null;
                   })()}
 
                   {hasReg?(
@@ -1137,12 +1208,26 @@ export default function AppMovil() {
                       {dayRegs.length>2&&<span style={{fontSize:7,color:isToday?'rgba(255,255,255,0.7)':C.onSurface3,fontWeight:600}}>+{dayRegs.length-2} más</span>}
                     </>
                   ):(
-                    !nlDay&&<span style={{fontSize:14,color:isToday?'rgba(255,255,255,0.6)':inPeriod?C.blue4:C.onSurface3,lineHeight:1}}>+</span>
+                    !nlDay&&!isPuente&&<span style={{fontSize:14,color:isToday?'rgba(255,255,255,0.6)':inPeriod?C.blue4:C.onSurface3,lineHeight:1}}>+</span>
                   )}
                 </div>
               );
             })}
           </div>
+
+          {/* Nota jornada intensiva */}
+          {vYear===2026&&vMonth===5&&(
+            <div style={{display:'flex',alignItems:'center',gap:8,marginTop:12,padding:'10px 14px',background:'#ede9fe',borderRadius:12,borderLeft:'3px solid #a78bfa'}}>
+              <span style={{fontSize:16,flexShrink:0}}>☀️</span>
+              <span style={{fontSize:fsS,fontWeight:600,color:'#6d28d9',lineHeight:1.4}}>5 de junio · Inicio de la jornada intensiva (7h)</span>
+            </div>
+          )}
+          {vYear===2026&&vMonth===7&&(
+            <div style={{display:'flex',alignItems:'center',gap:8,marginTop:12,padding:'10px 14px',background:'#ede9fe',borderRadius:12,borderLeft:'3px solid #a78bfa'}}>
+              <span style={{fontSize:16,flexShrink:0}}>🔚</span>
+              <span style={{fontSize:fsS,fontWeight:600,color:'#6d28d9',lineHeight:1.4}}>31 de agosto · Fin de la jornada intensiva (7h)</span>
+            </div>
+          )}
         </div>
 
 
