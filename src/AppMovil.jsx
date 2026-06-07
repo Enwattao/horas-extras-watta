@@ -7,9 +7,10 @@ import {
 import { jsPDF } from 'jspdf';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { FileOpener } from '@capacitor-community/file-opener';
 
-const APP_VERSION = '1.0.1';
-const APP_BUILD   = 2;
+const APP_VERSION = '1.0.2';
+const APP_BUILD   = 3;
 const GIST_URL    = 'https://gist.githubusercontent.com/Enwattao/03a1fdd890b99b87d36de3d7b7ffd3ba/raw/version.json';
 
 // ─── PALETA ───────────────────────────────────────────────────────────────────
@@ -1032,7 +1033,7 @@ export default function AppMovil() {
           try{
             const isNative=!!(window.Capacitor?.isNativePlatform?.()??window.Capacitor?.isNative);
             if(isNative){
-              // Convertir a base64 con FileReader (soporta archivos grandes sin desbordar la pila)
+              // Copiar el PDF a caché y abrirlo directamente en el visor de PDF
               const blob=await fetch('calendario_laboral.pdf').then(r=>r.blob());
               const base64=await new Promise((resolve,reject)=>{
                 const reader=new FileReader();
@@ -1042,11 +1043,11 @@ export default function AppMovil() {
               });
               await Filesystem.writeFile({path:'calendario_laboral_huelva_2026.pdf',data:base64,directory:Directory.Cache,recursive:true});
               const{uri}=await Filesystem.getUri({path:'calendario_laboral_huelva_2026.pdf',directory:Directory.Cache});
-              await Share.share({title:'Calendario Laboral Huelva 2026',url:uri,dialogTitle:'Abrir con…'});
+              await FileOpener.open({filePath:uri,contentType:'application/pdf'});
             }else{
               window.open('calendario_laboral.pdf','_blank');
             }
-          }catch(e){console.error('PDF calendario:',e);showToast('Error al abrir el PDF: '+(e?.message||'desconocido'),false);}
+          }catch(e){console.error('PDF calendario:',e);showToast('No se pudo abrir el PDF: '+(e?.message||'')+' — instala un lector de PDF',false);}
         }} style={{width:'100%',padding:'13px',background:'#1e3a5f',border:'none',borderRadius:12,fontSize:fs,color:'#fff',cursor:'pointer',fontFamily:'inherit',fontWeight:700,marginBottom:14,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
           📅 Ver Calendario Laboral Huelva 2026
         </button>
@@ -1592,11 +1593,6 @@ export default function AppMovil() {
         {tab==='cal'  &&<TabCalendario/>}
         {tab==='hist' &&<TabHistorial/>}
         {tab==='stats'&&<TabStats/>}
-        {tab==='cal'&&(
-          <button onClick={()=>openModal('horas',{fecha:HOY_STR()})} style={{position:'fixed',bottom:82,right:18,width:58,height:58,borderRadius:'50%',background:C.blue4,border:'none',boxShadow:`0 8px 28px rgba(${hex2rgb(C.blue4)},.55),0 2px 8px rgba(0,0,0,.15)`,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',zIndex:100,fontSize:28,color:'#fff',fontWeight:300,lineHeight:1}}>
-            +
-          </button>
-        )}
       </div>
       <div style={{height:72,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',alignItems:'center',paddingBottom:'env(safe-area-inset-bottom,4px)',boxShadow:'0 -4px 20px rgba(7,30,69,0.09)',flexShrink:0}}>
         {navItems.map(n=>{
